@@ -61,7 +61,7 @@ export class MemoryRepository {
         updates.content    || null,
         updates.importance || null,
         updates.category   || null,
-        updates.qdrantId   || null,
+        (updates as any).qdrantId || null,
       ]
     )
     return this.toMemoryUnit(result.rows[0])

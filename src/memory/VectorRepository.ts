@@ -14,11 +14,11 @@ export class VectorRepository {
 
     await qdrant.upsert(COLLECTION_NAME, {
       points: [
-        {
-          id:      qdrantId,
-          vector:  vector,
-          payload: payload,
-        }
+      {
+  id:      qdrantId,
+  vector:  vector,
+  payload: payload as Record<string, unknown>,
+}
       ]
     })
 
