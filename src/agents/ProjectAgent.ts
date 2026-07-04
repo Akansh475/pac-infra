@@ -1,28 +1,24 @@
-import OpenAI from 'openai'
-import { config } from '../config'
 import { MemoryEngine } from '../memory/MemoryEngine'
 import { PriorityEngine } from '../priority/PriorityEngine'
 import { CreateMemoryInput } from '../types'
+import { groqClient, LLM_MODEL } from '../config/llm'
 
 interface GitHubEvent {
-  type:    string   // "PullRequestEvent" | "PushEvent" | "IssuesEvent"
-  repo:    string   // "akansh/codereviewerai"
-  action:  string   // "opened" | "merged" | "closed"
-  title:   string   // PR title or commit message
-  date:    string
+  type:   string
+  repo:   string
+  action: string
+  title:  string
+  date:   string
 }
 
 export class ProjectAgent {
-  private llm       = new OpenAI({ apiKey: config.openai.apiKey })
   private memEngine = new MemoryEngine()
   private priority  = new PriorityEngine()
 
   // ─── MAIN PROCESS ────────────────────────────────────────
   async process(event: GitHubEvent, userId: string): Promise<void> {
-    // Step 1: extract memory from github event
     const extracted = await this.extract(event)
 
-    // Step 2: save each memory
     for (const item of extracted) {
       const importance = this.priority.calculate({
         daysSinceCreated: 0,
@@ -50,7 +46,7 @@ export class ProjectAgent {
   private async extract(event: GitHubEvent): Promise<any[]> {
     const prompt = `
 You are an AI that extracts project memories from GitHub events.
-Analyze this GitHub event and return a JSON array of memories.
+Analyze this GitHub event and return a JSON object with memories array.
 
 GitHub Event:
 Type:   ${event.type}
@@ -59,22 +55,23 @@ Action: ${event.action}
 Title:  ${event.title}
 Date:   ${event.date}
 
-Return ONLY a JSON array. No extra text. Format:
-[
-  {
-    "type": "fact" | "task" | "project",
-    "content": "clear description of what happened",
-    "category": "general"
-  }
-]`
+Return ONLY a valid JSON object. No extra text. Format:
+{
+  "memories": [
+    {
+      "type": "fact" | "task" | "project",
+      "content": "clear description of what happened",
+      "category": "general"
+    }
+  ]
+}`
 
-    const response = await this.llm.chat.completions.create({
-      model: 'gpt-4o',
+    const response = await groqClient.chat.completions.create({
+      model: LLM_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' }
     })
 
-    const raw = response.choices[0].message.content || '[]'
+    const raw = response.choices[0].message.content || '{}'
 
     try {
       const parsed = JSON.parse(raw)

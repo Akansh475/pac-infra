@@ -1,8 +1,7 @@
-import OpenAI from 'openai'
-import { config } from '../config'
 import { MemoryEngine } from '../memory/MemoryEngine'
 import { PriorityEngine } from '../priority/PriorityEngine'
 import { CreateMemoryInput } from '../types'
+import { groqClient, LLM_MODEL } from '../config/llm'
 
 interface RawEmail {
   from:    string
@@ -12,16 +11,13 @@ interface RawEmail {
 }
 
 export class EmailAgent {
-  private llm      = new OpenAI({ apiKey: config.openai.apiKey })
   private memEngine = new MemoryEngine()
   private priority  = new PriorityEngine()
 
   // ─── MAIN PROCESS ────────────────────────────────────────
   async process(email: RawEmail, userId: string): Promise<void> {
-    // Step 1: extract memories from email using LLM
     const extracted = await this.extract(email)
 
-    // Step 2: save each extracted memory
     for (const item of extracted) {
       const importance = this.priority.calculate({
         daysSinceCreated: 0,
@@ -59,29 +55,29 @@ Subject: ${email.subject}
 Date: ${email.date}
 Body: ${email.body}
 
-Return ONLY a JSON array. No extra text. Format:
-[
-  {
-    "type": "fact" | "task" | "event" | "project",
-    "content": "clear description of the memory",
-    "category": "interview" | "deadline" | "report" | "general",
-    "emotionalWeight": 0.0 to 1.0,
-    "eventDate": "ISO date string or null",
-    "dueDate": "ISO date string or null"
-  }
-]`
+Return ONLY a valid JSON array. No extra text. Format:
+{
+  "memories": [
+    {
+      "type": "fact" | "task" | "event" | "project",
+      "content": "clear description of the memory",
+      "category": "interview" | "deadline" | "report" | "general",
+      "emotionalWeight": 0.0,
+      "eventDate": null,
+      "dueDate": null
+    }
+  ]
+}`
 
-    const response = await this.llm.chat.completions.create({
-      model: 'gpt-4o',
+    const response = await groqClient.chat.completions.create({
+      model: LLM_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' }
     })
 
-    const raw = response.choices[0].message.content || '[]'
+    const raw = response.choices[0].message.content || '{}'
 
     try {
       const parsed = JSON.parse(raw)
-      // handle both array and object with array inside
       return Array.isArray(parsed) ? parsed : parsed.memories || []
     } catch {
       console.error('EmailAgent: failed to parse LLM response', raw)

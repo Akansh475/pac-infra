@@ -1,13 +1,11 @@
 import { MemoryEngine } from '../memory/MemoryEngine'
 import { EmbeddingService } from './EmbeddingService'
 import { MemoryUnit } from '../types'
-import OpenAI from 'openai'
-import { config } from '../config'
+import { groqClient, LLM_MODEL } from '../config/llm'
 
 export class RAGPipeline {
   private memEngine = new MemoryEngine()
   private embedding = new EmbeddingService()
-  private llm       = new OpenAI({ apiKey: config.openai.apiKey })
 
   // ─── MAIN QUERY ──────────────────────────────────────────
   async query(userQuery: string, userId: string): Promise<string> {
@@ -18,12 +16,12 @@ export class RAGPipeline {
       return "I don't have enough information to answer that yet. Try connecting more data sources."
     }
 
-    // Step 2: structure memories as context (Option B)
+    // Step 2: structure memories as context
     const context = this.buildContext(results.map(r => r.memory))
 
-    // Step 3: call LLM with structured context
-    const response = await this.llm.chat.completions.create({
-      model: 'gpt-4o',
+    // Step 3: call Groq LLM with structured context
+    const response = await groqClient.chat.completions.create({
+      model: LLM_MODEL,
       messages: [
         {
           role: 'system',
@@ -44,7 +42,6 @@ Be concise and prioritize high importance memories.`
 
   // ─── BUILD STRUCTURED CONTEXT ────────────────────────────
   private buildContext(memories: MemoryUnit[]): string {
-    // sort by importance — highest first
     const sorted = memories.sort((a, b) => b.importance - a.importance)
 
     return sorted.map((m, index) => `
@@ -54,7 +51,7 @@ source:     ${m.source}
 date:       ${m.createdAt.toDateString()}
 importance: ${m.importance}
 content:    ${m.content}
-${m.dueDate ? `due:    ${m.dueDate.toDateString()}` : ''}
+${m.dueDate ? `due: ${m.dueDate.toDateString()}` : ''}
 `).join('\n---\n')
   }
 }

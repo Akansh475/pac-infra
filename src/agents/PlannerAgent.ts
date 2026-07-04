@@ -1,9 +1,7 @@
-import OpenAI from 'openai'
-import { config } from '../config'
 import { MemoryEngine } from '../memory/MemoryEngine'
+import { groqClient, LLM_MODEL } from '../config/llm'
 
 export class PlannerAgent {
-  private llm       = new OpenAI({ apiKey: config.openai.apiKey })
   private memEngine = new MemoryEngine()
 
   // ─── GENERATE DAILY BRIEFING ─────────────────────────────
@@ -30,9 +28,9 @@ content: ${r.memory.content}
 ${r.memory.dueDate ? `due: ${r.memory.dueDate.toDateString()}` : ''}
 `).join('\n')
 
-    // Step 4: generate briefing using LLM
-    const response = await this.llm.chat.completions.create({
-      model: 'gpt-4o',
+    // Step 4: generate briefing using Groq
+    const response = await groqClient.chat.completions.create({
+      model: LLM_MODEL,
       messages: [
         {
           role: 'system',

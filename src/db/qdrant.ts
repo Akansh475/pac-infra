@@ -7,7 +7,7 @@ const qdrant = new QdrantClient({
 })
 
 export const COLLECTION_NAME = 'memories'
-export const VECTOR_SIZE     = 1536  // OpenAI text-embedding-3-small
+export const VECTOR_SIZE     = 768  // Gemini text-embedding-004
 
 export async function initQdrantCollection(): Promise<void> {
   const collections = await qdrant.getCollections()
