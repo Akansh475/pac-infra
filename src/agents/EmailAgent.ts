@@ -14,9 +14,10 @@ export class EmailAgent {
   private memEngine = new MemoryEngine()
   private priority  = new PriorityEngine()
 
-  // ─── MAIN PROCESS ────────────────────────────────────────
   async process(email: RawEmail, userId: string): Promise<void> {
+    console.log('📧 Extracting memories from email...')
     const extracted = await this.extract(email)
+    console.log(`📧 Extracted ${extracted.length} memories`)
 
     for (const item of extracted) {
       const importance = this.priority.calculate({
@@ -43,11 +44,10 @@ export class EmailAgent {
     }
   }
 
-  // ─── EXTRACT MEMORIES FROM EMAIL ─────────────────────────
   private async extract(email: RawEmail): Promise<any[]> {
     const prompt = `
 You are an AI that extracts memories from emails.
-Analyze this email and return a JSON array of memories.
+Analyze this email and return a JSON object with memories array.
 
 Email:
 From: ${email.from}
@@ -55,24 +55,26 @@ Subject: ${email.subject}
 Date: ${email.date}
 Body: ${email.body}
 
-Return ONLY a valid JSON array. No extra text. Format:
+Return ONLY a valid JSON object. No extra text. Format:
 {
   "memories": [
     {
-      "type": "fact" | "task" | "event" | "project",
-      "content": "clear description of the memory",
-      "category": "interview" | "deadline" | "report" | "general",
-      "emotionalWeight": 0.0,
+      "type": "fact",
+      "content": "clear description",
+      "category": "interview",
+      "emotionalWeight": 0.5,
       "eventDate": null,
       "dueDate": null
     }
   ]
 }`
 
+    console.log('📧 Calling Groq API...')
     const response = await groqClient.chat.completions.create({
-      model: LLM_MODEL,
+      model:    LLM_MODEL,
       messages: [{ role: 'user', content: prompt }],
     })
+    console.log('📧 Groq responded!')
 
     const raw = response.choices[0].message.content || '{}'
 

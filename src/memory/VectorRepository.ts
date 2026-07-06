@@ -1,5 +1,4 @@
-import qdrant, { COLLECTION_NAME } from '../db/qdrant'
-import { SearchResult, MemoryUnit } from '../types'
+import { upsertVector, searchVectors, deleteVector } from '../db/qdrant'
 import { v4 as uuidv4 } from 'uuid'
 
 export class VectorRepository {
@@ -11,18 +10,8 @@ export class VectorRepository {
     payload: object
   ): Promise<string> {
     const qdrantId = uuidv4()
-
-    await qdrant.upsert(COLLECTION_NAME, {
-      points: [
-      {
-  id:      qdrantId,
-  vector:  vector,
-  payload: payload as Record<string, unknown>,
-}
-      ]
-    })
-
-    return qdrantId  // we store this back in Postgres
+    await upsertVector(qdrantId, vector, payload)
+    return qdrantId
   }
 
   // ─── SEARCH BY MEANING ───────────────────────────────────
@@ -31,27 +20,11 @@ export class VectorRepository {
     userId: string,
     topK: number = 10
   ): Promise<any[]> {
-    const results = await qdrant.search(COLLECTION_NAME, {
-      vector: queryVector,
-      limit:  topK,
-      filter: {
-        must: [
-          {
-            key:   'user_id',
-            match: { value: userId }  // only search THIS user's memories
-          }
-        ]
-      },
-      with_payload: true,
-    })
-
-    return results
+    return await searchVectors(queryVector, userId, topK)
   }
 
   // ─── DELETE VECTOR ───────────────────────────────────────
   async delete(qdrantId: string): Promise<void> {
-    await qdrant.delete(COLLECTION_NAME, {
-      points: [qdrantId]
-    })
+    await deleteVector(qdrantId)
   }
 }

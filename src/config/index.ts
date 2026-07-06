@@ -13,8 +13,16 @@ export const config = {
     host: process.env.QDRANT_HOST || 'localhost',
     port: parseInt(process.env.QDRANT_PORT || '6333'),
   },
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY || '',
+  groq: {
+    apiKey:  process.env.GROQ_API_KEY || '',
+    baseURL: 'https://api.groq.com/openai/v1',
+    model:   'llama-3.3-70b-versatile'
+  },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+  },
+  huggingface: {
+    apiKey: process.env.HF_API_KEY || '',
   },
   app: {
     port: parseInt(process.env.PORT || '4000'),

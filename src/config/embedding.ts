@@ -1,10 +1,18 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import axios from 'axios'
 import { config } from './index'
 
-const genAI = new GoogleGenerativeAI(config.gemini.apiKey)
+const HF_API_URL = 'https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2'
 
-export const embeddingModel = genAI.getGenerativeModel({
-  model: 'text-embedding-004'
-})
-
-export const EMBEDDING_SIZE = 768  // Gemini text-embedding-004 dimension
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const response = await axios.post(
+    HF_API_URL,
+    { inputs: text },
+    {
+      headers: {
+        Authorization: `Bearer ${config.huggingface.apiKey}`,
+        'Content-Type': 'application/json',
+      }
+    }
+  )
+  return response.data
+}
