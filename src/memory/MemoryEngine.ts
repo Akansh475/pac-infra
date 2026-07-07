@@ -1,12 +1,14 @@
 import { MemoryRepository } from './MemoryRepository'
 import { VectorRepository } from './VectorRepository'
 import { EmbeddingService } from '../rag/EmbeddingService'
+import { ClassificationService } from './ClassificationService'
 import { CreateMemoryInput, MemoryUnit, SearchResult } from '../types'
 
 export class MemoryEngine {
-  private memRepo   = new MemoryRepository()
-  private vecRepo   = new VectorRepository()
-  private embedding = new EmbeddingService()
+  private memRepo    = new MemoryRepository()
+  private vecRepo    = new VectorRepository()
+  private embedding  = new EmbeddingService()
+  private classifier = new ClassificationService()
 
   // ─── STORE ───────────────────────────────────────────────
   async store(input: CreateMemoryInput): Promise<MemoryUnit> {
@@ -33,9 +35,14 @@ export class MemoryEngine {
       await this.memRepo.update(memory.id, { qdrantId } as any)
 
     } catch (err) {
-      // Option C — Postgres save stays, Qdrant failed
-      // log and retry later
       console.error(`Qdrant indexing failed for memory ${memory.id}:`, err)
+    }
+
+    // Step 4: classify memory — extract people and projects
+    try {
+      await this.classifier.classify(memory.id, input.content)
+    } catch (err) {
+      console.error(`Classification failed for memory ${memory.id}:`, err)
     }
 
     return memory
@@ -48,9 +55,9 @@ export class MemoryEngine {
 
   // ─── SEARCH BY MEANING ───────────────────────────────────
   async search(
-    query: string,
+    query:  string,
     userId: string,
-    topK: number = 10
+    topK:   number = 10
   ): Promise<SearchResult[]> {
     // Step 1: convert query to vector
     const queryVector = await this.embedding.embed(query)
@@ -72,9 +79,65 @@ export class MemoryEngine {
     return memories.filter(m => m.memory !== null)
   }
 
+  // ─── HYBRID SEARCH ───────────────────────────────────────
+  async hybridSearch(params: {
+    query:     string
+    userId:    string
+    keyword?:  string
+    type?:     string
+    category?: string
+    fromDate?: Date
+    toDate?:   Date
+    topK?:     number
+  }): Promise<SearchResult[]> {
+
+    // Run both searches in parallel
+    const [semanticResults, keywordResults] = await Promise.all([
+      this.search(params.query, params.userId, params.topK || 10),
+      this.memRepo.hybridSearch({
+        userId:   params.userId,
+        keyword:  params.keyword,
+        type:     params.type,
+        category: params.category,
+        fromDate: params.fromDate,
+        toDate:   params.toDate,
+        limit:    params.topK || 10
+      })
+    ])
+
+    // Convert postgres results to SearchResult format
+    const pgResults: SearchResult[] = keywordResults.map(m => ({
+      memory: m,
+      score:  m.importance
+    }))
+
+    // Combine and deduplicate by memory id
+    const seen     = new Set<string>()
+    const combined: SearchResult[] = []
+
+    const maxLen = Math.max(semanticResults.length, pgResults.length)
+
+    for (let i = 0; i < maxLen; i++) {
+      if (i < semanticResults.length) {
+        if (!seen.has(semanticResults[i].memory.id)) {
+          seen.add(semanticResults[i].memory.id)
+          combined.push(semanticResults[i])
+        }
+      }
+      if (i < pgResults.length) {
+        if (!seen.has(pgResults[i].memory.id)) {
+          seen.add(pgResults[i].memory.id)
+          combined.push(pgResults[i])
+        }
+      }
+    }
+
+    return combined.sort((a, b) => b.score - a.score)
+  }
+
   // ─── UPDATE ──────────────────────────────────────────────
   async update(
-    id: string,
+    id:      string,
     updates: Partial<MemoryUnit>
   ): Promise<MemoryUnit> {
     return await this.memRepo.update(id, updates)
@@ -85,10 +148,8 @@ export class MemoryEngine {
     const memory = await this.memRepo.findById(id)
     if (!memory) return
 
-    // soft delete in Postgres
     await this.memRepo.delete(id)
 
-    // hard delete vector from Qdrant
     if ((memory as any).qdrantId) {
       await this.vecRepo.delete((memory as any).qdrantId)
     }

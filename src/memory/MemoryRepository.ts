@@ -95,4 +95,58 @@ export class MemoryRepository {
       deletedAt:  row.deleted_at,
     }
   }
+  async hybridSearch(params: {
+    userId:    string
+    keyword?:  string
+    type?:     string
+    category?: string
+    fromDate?: Date
+    toDate?:   Date
+    limit?:    number
+  }): Promise<MemoryUnit[]> {
+    const conditions = ['user_id = $1', 'deleted_at IS NULL']
+    const values: any[] = [params.userId]
+    let idx = 2
+
+    if (params.keyword) {
+      conditions.push(`content ILIKE $${idx}`)
+      values.push(`%${params.keyword}%`)
+      idx++
+    }
+
+    if (params.type) {
+      conditions.push(`type = $${idx}`)
+      values.push(params.type)
+      idx++
+    }
+
+    if (params.category) {
+      conditions.push(`category = $${idx}`)
+      values.push(params.category)
+      idx++
+    }
+
+    if (params.fromDate) {
+      conditions.push(`created_at >= $${idx}`)
+      values.push(params.fromDate)
+      idx++
+    }
+
+    if (params.toDate) {
+      conditions.push(`created_at <= $${idx}`)
+      values.push(params.toDate)
+      idx++
+    }
+
+    const query = `
+      SELECT * FROM memories
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY importance DESC
+      LIMIT $${idx}
+    `
+    values.push(params.limit || 10)
+
+    const result = await pool.query(query, values)
+    return result.rows.map(this.toMemoryUnit)
+  }
 }
