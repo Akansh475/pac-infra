@@ -1,11 +1,13 @@
 import { EmailAgent } from '../agents/EmailAgent'
 import { CalendarAgent } from '../agents/CalendarAgent'
 import { ProjectAgent } from '../agents/ProjectAgent'
+import { JobAgent } from '../agents/JobAgent'
+import { FactsAgent } from '../agents/FactsAgent'
 
 // ─── INGESTION EVENT TYPE ─────────────────────────────────
 export interface IngestionEvent {
-  source: 'gmail' | 'calendar' | 'github'
-  type:   'email' | 'event' | 'push' | 'pr'
+  source: 'gmail' | 'calendar' | 'github' | 'job' | 'manual'
+  type:   'email' | 'event' | 'push' | 'pr' | 'job_email' | 'text'
   userId: string
   data:   any
 }
@@ -14,25 +16,22 @@ export class IngestionPipeline {
   private emailAgent    = new EmailAgent()
   private calendarAgent = new CalendarAgent()
   private projectAgent  = new ProjectAgent()
+  private jobAgent      = new JobAgent()
+  private factsAgent    = new FactsAgent()
 
   // ─── MAIN ENTRY POINT ────────────────────────────────────
   async ingest(event: IngestionEvent): Promise<void> {
     console.log(`📥 Ingesting: source=${event.source} type=${event.type}`)
-
-    // Step 1: clean and normalize
     const normalized = this.normalize(event)
-
-    // Step 2: route to correct agent
     await this.route(normalized)
-
     console.log(`📥 Ingestion complete: source=${event.source}`)
   }
 
   // ─── NORMALIZE ───────────────────────────────────────────
-  // clean raw data before sending to agent
   private normalize(event: IngestionEvent): IngestionEvent {
     switch (event.source) {
       case 'gmail':
+      case 'job':
         return {
           ...event,
           data: {
@@ -68,6 +67,15 @@ export class IngestionPipeline {
           }
         }
 
+      case 'manual':
+        return {
+          ...event,
+          data: {
+            text: event.data.text?.trim() || '',
+            date: event.data.date         || new Date().toISOString(),
+          }
+        }
+
       default:
         return event
     }
@@ -80,12 +88,20 @@ export class IngestionPipeline {
         await this.emailAgent.process(event.data, event.userId)
         break
 
+      case 'job':
+        await this.jobAgent.process(event.data, event.userId)
+        break
+
       case 'calendar':
         await this.calendarAgent.process(event.data, event.userId)
         break
 
       case 'github':
         await this.projectAgent.process(event.data, event.userId)
+        break
+
+      case 'manual':
+        await this.factsAgent.process(event.data, event.userId)
         break
 
       default:

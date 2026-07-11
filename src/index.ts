@@ -11,6 +11,8 @@ import { IngestionPipeline } from './pipelines/IngestionPipeline'
 const TEST_USER_ID = '550e8400-e29b-41d4-a716-446655440000'
 
 async function main() {
+
+  
   console.log('🚀 PAC Agent Engine starting...')
 
   await pool.query('SELECT 1')
@@ -24,6 +26,19 @@ async function main() {
 
   // use pipeline instead of agents directly
   const pipeline = new IngestionPipeline()
+
+  // ingest job email
+await pipeline.ingest({
+  source: 'job',
+  type:   'job_email',
+  userId: TEST_USER_ID,
+  data: {
+    from:    'recruiting@amazon.com',
+    subject: 'Your application for SDE-1 role — Online Assessment',
+    body:    'Hi Akansh, congratulations! We would like to move forward with your application for the SDE-1 position. Please complete the online assessment by July 15th at 11:59 PM. The assessment will take approximately 90 minutes.',
+    date:    new Date().toISOString()
+  }
+})
 
   // ingest email
   await pipeline.ingest({
@@ -66,6 +81,16 @@ async function main() {
       date:   new Date().toISOString()
     }
   })
+  // ingest manual fact
+await pipeline.ingest({
+  source: 'manual',
+  type:   'text',
+  userId: TEST_USER_ID,
+  data: {
+    text: 'I met John from Microsoft today, he is the engineering manager for the Azure team. He mentioned they are hiring for backend roles.',
+    date: new Date().toISOString()
+  }
+})
 
   console.log('\n✅ All data ingested via pipeline\n')
 
