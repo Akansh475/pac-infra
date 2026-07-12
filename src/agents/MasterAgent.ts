@@ -1,24 +1,32 @@
 import { RAGPipeline } from '../rag/RAGPipeline'
 import { PlannerAgent } from './PlannerAgent'
+import { RelationshipAgent } from './RelationshipAgent'
+import { ExperienceAgent } from './ExperienceAgent'
 
-type AgentType = 'planner' | 'rag'
+type AgentType = 'planner' | 'rag' | 'relationship' | 'experience'
 
 export class MasterAgent {
-  private rag     = new RAGPipeline()
-  private planner = new PlannerAgent()
+  private rag          = new RAGPipeline()
+  private planner      = new PlannerAgent()
+  private relationship = new RelationshipAgent()
+  private experience   = new ExperienceAgent()
 
-  // ─── MAIN ENTRY POINT ────────────────────────────────────
   async query(userQuery: string, userId: string): Promise<string> {
     console.log(`MasterAgent received query: "${userQuery}"`)
 
-    // Step 1: decide which agent to call
     const agent = this.route(userQuery)
     console.log(`MasterAgent routing to: ${agent}`)
 
-    // Step 2: call the right agent
     switch (agent) {
       case 'planner':
         return await this.planner.generateDailyBriefing(userId)
+
+      case 'relationship':
+        const name = this.extractName(userQuery)
+        return await this.relationship.buildProfile(name, userId)
+
+      case 'experience':
+        return await this.experience.analyzePatterns(userId)
 
       case 'rag':
       default:
@@ -26,27 +34,44 @@ export class MasterAgent {
     }
   }
 
-  // ─── ROUTING LOGIC ───────────────────────────────────────
   private route(query: string): AgentType {
     const q = query.toLowerCase()
 
-    // planner triggers
     const plannerKeywords = [
-      'today',
-      'briefing',
-      'plan',
-      'what should i do',
-      'morning',
-      'daily',
-      'prioritize',
-      'what should i know'
+      'today', 'briefing', 'plan', 'what should i do',
+      'morning', 'daily', 'prioritize', 'what should i know'
     ]
 
-    const isPlannerQuery = plannerKeywords.some(k => q.includes(k))
+    const relationshipKeywords = [
+      'who is', 'tell me about', 'what do i know about',
+      'relationship with', 'what do i owe', 'committed to'
+    ]
 
-    if (isPlannerQuery) return 'planner'
+    const experienceKeywords = [
+      'pattern', 'habit', 'behavior', 'tendency',
+      'analyze me', 'what do i usually', 'my style',
+      'insights about me', 'how do i work'
+    ]
 
-    // everything else goes to RAG
+    if (plannerKeywords.some(k => q.includes(k)))      return 'planner'
+    if (relationshipKeywords.some(k => q.includes(k))) return 'relationship'
+    if (experienceKeywords.some(k => q.includes(k)))   return 'experience'
+
     return 'rag'
+  }
+
+  private extractName(query: string): string {
+    const q = query.toLowerCase()
+
+    const cleaned = q
+      .replace('who is', '')
+      .replace('tell me about', '')
+      .replace('what do i know about', '')
+      .replace('relationship with', '')
+      .replace('what do i owe', '')
+      .replace('committed to', '')
+      .trim()
+
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
   }
 }
