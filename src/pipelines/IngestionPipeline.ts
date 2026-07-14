@@ -3,11 +3,13 @@ import { CalendarAgent } from '../agents/CalendarAgent'
 import { ProjectAgent } from '../agents/ProjectAgent'
 import { JobAgent } from '../agents/JobAgent'
 import { FactsAgent } from '../agents/FactsAgent'
+import { DocumentAgent } from '../agents/DocumentAgent'
+import { DeliveryAgent } from '../agents/DeliveryAgent'
 
 // ─── INGESTION EVENT TYPE ─────────────────────────────────
 export interface IngestionEvent {
-  source: 'gmail' | 'calendar' | 'github' | 'job' | 'manual'
-  type:   'email' | 'event' | 'push' | 'pr' | 'job_email' | 'text'
+  source: 'gmail' | 'calendar' | 'github' | 'job' | 'manual' | 'document' | 'delivery'
+  type:   'email' | 'event' | 'push' | 'pr' | 'job_email' | 'text' | 'pdf' | 'markdown' | 'delivery_email'
   userId: string
   data:   any
 }
@@ -18,8 +20,9 @@ export class IngestionPipeline {
   private projectAgent  = new ProjectAgent()
   private jobAgent      = new JobAgent()
   private factsAgent    = new FactsAgent()
+  private documentAgent = new DocumentAgent()
+  private deliveryAgent = new DeliveryAgent()
 
-  // ─── MAIN ENTRY POINT ────────────────────────────────────
   async ingest(event: IngestionEvent): Promise<void> {
     console.log(`📥 Ingesting: source=${event.source} type=${event.type}`)
     const normalized = this.normalize(event)
@@ -27,11 +30,11 @@ export class IngestionPipeline {
     console.log(`📥 Ingestion complete: source=${event.source}`)
   }
 
-  // ─── NORMALIZE ───────────────────────────────────────────
   private normalize(event: IngestionEvent): IngestionEvent {
     switch (event.source) {
       case 'gmail':
       case 'job':
+      case 'delivery':
         return {
           ...event,
           data: {
@@ -76,12 +79,21 @@ export class IngestionPipeline {
           }
         }
 
+      case 'document':
+        return {
+          ...event,
+          data: {
+            title:   event.data.title?.trim()   || 'document',
+            content: event.data.content?.trim() || '',
+            type:    event.data.type            || 'text',
+          }
+        }
+
       default:
         return event
     }
   }
 
-  // ─── ROUTE TO CORRECT AGENT ──────────────────────────────
   private async route(event: IngestionEvent): Promise<void> {
     switch (event.source) {
       case 'gmail':
@@ -102,6 +114,14 @@ export class IngestionPipeline {
 
       case 'manual':
         await this.factsAgent.process(event.data, event.userId)
+        break
+
+      case 'document':
+        await this.documentAgent.process(event.data, event.userId)
+        break
+
+      case 'delivery':
+        await this.deliveryAgent.process(event.data, event.userId)
         break
 
       default:

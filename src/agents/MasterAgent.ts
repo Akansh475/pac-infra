@@ -3,7 +3,7 @@ import { PlannerAgent } from './PlannerAgent'
 import { RelationshipAgent } from './RelationshipAgent'
 import { ExperienceAgent } from './ExperienceAgent'
 
-type AgentType = 'planner' | 'rag' | 'relationship' | 'experience'
+type AgentType = 'planner' | 'rag' | 'relationship' | 'experience' | 'document' | 'delivery'
 
 export class MasterAgent {
   private rag          = new RAGPipeline()
@@ -11,6 +11,7 @@ export class MasterAgent {
   private relationship = new RelationshipAgent()
   private experience   = new ExperienceAgent()
 
+  // ─── MAIN ENTRY POINT ────────────────────────────────────
   async query(userQuery: string, userId: string): Promise<string> {
     console.log(`MasterAgent received query: "${userQuery}"`)
 
@@ -28,12 +29,15 @@ export class MasterAgent {
       case 'experience':
         return await this.experience.analyzePatterns(userId)
 
+      case 'document':
+      case 'delivery':
       case 'rag':
       default:
         return await this.rag.query(userQuery, userId)
     }
   }
 
+  // ─── ROUTING LOGIC ───────────────────────────────────────
   private route(query: string): AgentType {
     const q = query.toLowerCase()
 
@@ -43,8 +47,11 @@ export class MasterAgent {
     ]
 
     const relationshipKeywords = [
-      'who is', 'tell me about', 'what do i know about',
-      'relationship with', 'what do i owe', 'committed to'
+      'who is',
+      'what do i know about',
+      'relationship with',
+      'what do i owe',
+      'committed to'
     ]
 
     const experienceKeywords = [
@@ -53,19 +60,37 @@ export class MasterAgent {
       'insights about me', 'how do i work'
     ]
 
+    const documentKeywords = [
+      'my resume',
+      'my skills',
+      'my experience',
+      'my projects',
+      'what did i build',
+      'my background',
+      'tell me about my'
+    ]
+
+    const deliveryKeywords = [
+      'delivery', 'order', 'package', 'shipping',
+      'arriving', 'keyboard', 'amazon', 'flipkart',
+      'track', 'shipment', 'bill', 'due'
+    ]
+
     if (plannerKeywords.some(k => q.includes(k)))      return 'planner'
     if (relationshipKeywords.some(k => q.includes(k))) return 'relationship'
     if (experienceKeywords.some(k => q.includes(k)))   return 'experience'
+    if (documentKeywords.some(k => q.includes(k)))     return 'document'
+    if (deliveryKeywords.some(k => q.includes(k)))     return 'delivery'
 
     return 'rag'
   }
 
+  // ─── EXTRACT PERSON NAME FROM QUERY ──────────────────────
   private extractName(query: string): string {
     const q = query.toLowerCase()
 
     const cleaned = q
       .replace('who is', '')
-      .replace('tell me about', '')
       .replace('what do i know about', '')
       .replace('relationship with', '')
       .replace('what do i owe', '')
