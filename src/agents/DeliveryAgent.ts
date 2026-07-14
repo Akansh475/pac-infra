@@ -93,7 +93,7 @@ Return ONLY valid JSON. No extra text.`
     })
     console.log('🚚 Groq responded!')
     const raw     = response.choices[0].message.content || '{}'
-console.log('🚚 Raw Groq response:', raw)  // add this
+// add this
 const cleaned = raw.replace(/```json|```/g, '').trim()
    
 

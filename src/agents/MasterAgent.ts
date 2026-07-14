@@ -2,16 +2,17 @@ import { RAGPipeline } from '../rag/RAGPipeline'
 import { PlannerAgent } from './PlannerAgent'
 import { RelationshipAgent } from './RelationshipAgent'
 import { ExperienceAgent } from './ExperienceAgent'
+import { MemoryOptimizer } from '../memory/MemoryOptimizer'
 
-type AgentType = 'planner' | 'rag' | 'relationship' | 'experience' | 'document' | 'delivery'
+type AgentType = 'planner' | 'rag' | 'relationship' | 'experience' | 'document' | 'delivery' | 'optimize'
 
 export class MasterAgent {
-  private rag          = new RAGPipeline()
-  private planner      = new PlannerAgent()
+  private rag       = new RAGPipeline()
+  private planner   = new PlannerAgent()
   private relationship = new RelationshipAgent()
   private experience   = new ExperienceAgent()
+  private optimizer    = new MemoryOptimizer()
 
-  // ─── MAIN ENTRY POINT ────────────────────────────────────
   async query(userQuery: string, userId: string): Promise<string> {
     console.log(`MasterAgent received query: "${userQuery}"`)
 
@@ -29,6 +30,10 @@ export class MasterAgent {
       case 'experience':
         return await this.experience.analyzePatterns(userId)
 
+      case 'optimize':
+        await this.optimizer.optimize(userId)
+        return '🔧 Memory optimization complete! Duplicates removed, old memories forgotten and summarized.'
+
       case 'document':
       case 'delivery':
       case 'rag':
@@ -37,7 +42,6 @@ export class MasterAgent {
     }
   }
 
-  // ─── ROUTING LOGIC ───────────────────────────────────────
   private route(query: string): AgentType {
     const q = query.toLowerCase()
 
@@ -61,13 +65,9 @@ export class MasterAgent {
     ]
 
     const documentKeywords = [
-      'my resume',
-      'my skills',
-      'my experience',
-      'my projects',
-      'what did i build',
-      'my background',
-      'tell me about my'
+      'my resume', 'my skills', 'my experience',
+      'my projects', 'what did i build',
+      'my background', 'tell me about my'
     ]
 
     const deliveryKeywords = [
@@ -76,19 +76,23 @@ export class MasterAgent {
       'track', 'shipment', 'bill', 'due'
     ]
 
+    const optimizeKeywords = [
+      'optimize memory', 'clean memory', 'remove duplicates',
+      'forget old', 'summarize memories', 'cleanup'
+    ]
+
     if (plannerKeywords.some(k => q.includes(k)))      return 'planner'
     if (relationshipKeywords.some(k => q.includes(k))) return 'relationship'
     if (experienceKeywords.some(k => q.includes(k)))   return 'experience'
     if (documentKeywords.some(k => q.includes(k)))     return 'document'
     if (deliveryKeywords.some(k => q.includes(k)))     return 'delivery'
+    if (optimizeKeywords.some(k => q.includes(k)))     return 'optimize'
 
     return 'rag'
   }
 
-  // ─── EXTRACT PERSON NAME FROM QUERY ──────────────────────
   private extractName(query: string): string {
     const q = query.toLowerCase()
-
     const cleaned = q
       .replace('who is', '')
       .replace('what do i know about', '')
@@ -96,7 +100,6 @@ export class MasterAgent {
       .replace('what do i owe', '')
       .replace('committed to', '')
       .trim()
-
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
   }
 }
