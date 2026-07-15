@@ -2,6 +2,11 @@ import { MemoryEngine } from '../memory/MemoryEngine'
 import { PriorityEngine } from '../priority/PriorityEngine'
 import { CreateMemoryInput } from '../types'
 import { groqClient, LLM_MODEL } from '../config/llm'
+import {
+  linkEventToPerson,
+  linkPersonToCompany,
+  createPersonNode
+} from '../db/neo4j'
 
 interface CalendarEvent {
   title:           string
@@ -44,6 +49,22 @@ export class CalendarAgent {
 
       await this.memEngine.store(input)
     }
+
+    // link event to attendees in Neo4j
+    if (event.attendees && event.attendees.length > 0) {
+      for (const attendee of event.attendees) {
+        await createPersonNode(attendee)
+        await linkEventToPerson(event.title, attendee)
+
+        // detect company from email domain
+        const domain = attendee.split('@')[1]
+        if (domain && domain !== 'gmail.com') {
+          const company = domain.split('.')[0]
+          await linkPersonToCompany(attendee, company)
+          console.log(`📅 Linked ${attendee} → ${company}`)
+        }
+      }
+    }
   }
 
   private async extract(event: CalendarEvent): Promise<any[]> {
@@ -85,7 +106,7 @@ Return ONLY a valid JSON object. No extra text. Format:
     })
     console.log('📅 Groq responded!')
 
-    const raw = response.choices[0].message.content || '{}'
+    const raw     = response.choices[0].message.content || '{}'
     const cleaned = raw.replace(/```json|```/g, '').trim()
 
     try {

@@ -2,6 +2,11 @@ import { MemoryEngine } from '../memory/MemoryEngine'
 import { PriorityEngine } from '../priority/PriorityEngine'
 import { CreateMemoryInput } from '../types'
 import { groqClient, LLM_MODEL } from '../config/llm'
+import {
+  linkUserToJob,
+  createCompanyNode,
+  linkPersonToCompany
+} from '../db/neo4j'
 
 interface JobEmail {
   from:    string
@@ -11,17 +16,16 @@ interface JobEmail {
 }
 
 interface JobExtraction {
-  company:    string
-  role:       string
-  status:     'applied' | 'oa' | 'interview' | 'offer' | 'rejected'
-  memories:   any[]
+  company:  string
+  role:     string
+  status:   'applied' | 'oa' | 'interview' | 'offer' | 'rejected'
+  memories: any[]
 }
 
 export class JobAgent {
   private memEngine = new MemoryEngine()
   private priority  = new PriorityEngine()
 
-  // ─── MAIN PROCESS ────────────────────────────────────────
   async process(email: JobEmail, userId: string): Promise<void> {
     console.log('💼 JobAgent processing email...')
     const extracted = await this.extract(email)
@@ -33,7 +37,7 @@ export class JobAgent {
 
     console.log(`💼 Job: ${extracted.company} | ${extracted.role} | ${extracted.status}`)
 
-    // save each memory
+    // save memories
     for (const item of extracted.memories) {
       const importance = this.priority.calculate({
         daysSinceCreated: 0,
@@ -57,9 +61,13 @@ export class JobAgent {
 
       await this.memEngine.store(input)
     }
+
+    // update Neo4j graph
+    await createCompanyNode(extracted.company)
+    await linkUserToJob(userId, extracted.company, extracted.role, extracted.status)
+    console.log(`💼 Neo4j: User → ${extracted.company} (${extracted.role}) [${extracted.status}]`)
   }
 
-  // ─── EXTRACT JOB INFO FROM EMAIL ─────────────────────────
   private async extract(email: JobEmail): Promise<JobExtraction | null> {
     const prompt = `
 You are an AI that extracts job application information from emails.
